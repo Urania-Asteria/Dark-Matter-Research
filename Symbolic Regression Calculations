@@ -1,0 +1,53 @@
+#STEP 4 OF PROGRAM FLOW
+
+#Runs symbolic regression for the given data and calculated dark matter data to find equations that are not predefined
+#Note: The same process was done for y4_array by setting the variable o_velocity equal to y4_array
+
+import pandas as pd
+import subprocess
+import sys
+from pysr import PySRRegressor
+
+#Use if pysr is not installing as a package
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+try:
+    from pysr import PySRRegressor
+except ImportError:
+    install('pysr')
+    from pysr import PySRRegressor
+    print("PySR installed successfully.")
+
+#Sample data
+radius_kpc = np.array([0.32, 0.64, 0.96])
+
+o_velocity = np.array([24.4, 43.3, 45.5])
+
+if len(radius) != len(o_velocity):
+  min_length = min(len(radius), len(o_velocity))
+  radius = radius[:min_length]  
+  o_velocity = o_velocity[:min_length]
+
+X = np.array(radius).reshape(-1, 1)
+Y = np.array(o_velocity)
+
+#Normalize the data
+X = X / np.max(X)
+Y = Y / np.max(Y)
+
+#Ensures both arrays are equal
+print("Shape of X:", X.shape)
+print("Shape of Y:", Y.shape)
+# If Y has one more sample, remove the last sample from Y
+if Y.shape[0] > X.shape[0]:
+    Y = Y[:-1]
+# If X has one more sample, remove the last sample from X
+elif X.shape[0] > Y.shape[0]:
+    X = X[:-1]
+
+#Run symbolic regression
+model = PySRRegressor(model_selection="best", niterations=1000, binary_operators=["+", "*", "-", "/"], unary_operators=["sqrt", "exp", "log"], loss="loss(x, y) = (x - y)^2", verbosity=1)
+
+#Equations appear with both complexity level and accuracy
+model.fit(X, Y)
+print(model.equations_)

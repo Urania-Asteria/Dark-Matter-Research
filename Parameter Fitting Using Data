@@ -1,0 +1,87 @@
+#STEP 1 OF PROGRAM FLOW
+
+#Calculates parameters for equation and finds error bounds
+
+import math
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+import numpy as np
+from sklearn.utils import resample
+
+####################################################################3###############
+#Calculation of parameters given model and data
+
+  G = 6.6743e-11 #Gravitational constant in m^3 kg^-1 s^-2
+  kpc_to_m = 3.0857e19
+
+  radius_kpc = np.array([0.32, 0.64, 0.96]) #sample data
+  radius_m = radius_kpc * kpc_to_m #unit conversion
+
+  print(f"The observed radii are: {radius_kpc}")
+
+  o_velocity = np.array([24.4, 43.3, 45.5])
+
+  print(f"The observed values are: {o_velocity}")
+
+  def Decomposition_Model(r, Bh_M, B_M, D_M, r0, H_density, H_r, a): #formulas for different components of the galaxy
+    v1 = np.sqrt(np.clip(G * Bh_M / r, 0, np.inf))  # Black Hole
+    v2 = np.sqrt(np.clip(G * B_M * r / (r + a)**2, 0, np.inf))  # Bulge
+    v3 = np.sqrt(np.clip(G * D_M / (2 * r0) * (r / r0)**2 * np.exp(-r / r0), 0, np.inf))  # Disk
+    v4 = np.sqrt(np.clip(G * (4 * np.pi * H_density * H_r**3 * (np.log(1 + r / H_r) - r / (r + H_r))/r), 0, np.inf))#Dark matter halo
+
+    v_total = np.sqrt(v1**2 + v2**2 + v3**2 + v4**2)
+
+    return v_total / 1000 # Convert to km/s
+
+  def Log_Model(r, log_Bh_M, log_B_M, log_D_M, log_r0, log_H_density, log_H_r, log_a): #normalizes each component
+    Bh_M = 10**log_Bh_M
+    B_M = 10**log_B_M
+    D_M = 10**log_D_M
+    r0 = 10**log_r0
+    H_density = 10**log_H_density
+    H_r = 10**log_H_r
+    a = 10**log_a
+    return Decomposition_Model(r, Bh_M, B_M, D_M, r0, H_density, H_r, a)
+
+  p0_log = [37, 39.5, 42, 20.5, -23, 22, 20.5] #sample values
+
+  lower_bounds = [36.0, 38.6, 40.9, 19.8, -27.0, 21.0, 19.4] #bounds based on known data
+  upper_bounds = [38.5, 40.9, 42.9, 21.6, -21.0, 24.0, 21.6]
+
+  params_log, _ = curve_fit(Log_Model, radius_m, o_velocity, p0=p0_log, bounds=(lower_bounds, upper_bounds), maxfev=100000)
+  params_linear = 10**np.array(params_log) #unnormalizes data
+  fit = Decomposition_Model(radius_m, *params_linear) #calculates velocity values of the model
+
+  #Parameter values of each component from model
+  print(f"Values of total velocity: {fit}")
+  print(f"Black Hole Mass (Bh_M): {params_linear[0]} kg")
+  print(f"Bulge Mass (B_M): {params_linear[1]} kg")
+  print(f"Disk Mass (D_M): {params_linear[2]} kg")
+  print(f"Disk Scale Length (r0): {params_linear[3]} m")
+  print(f"Dark Matter Halo Density (H_density): {params_linear[4]} kg/m^3")
+  print(f"Dark Matter Halo Radius (H_r): {params_linear[5]} m")
+  print(f"Bulge Scale Length (a): {params_linear[6]} m")
+
+##########################################################################################
+  
+  #Bootstrap error calculation
+  bootstrap = []
+
+  for i in range(1000):
+    resample = np.random.choice(len(radius_m), size=len(radius_m), replace=True)
+    r_sample = radius_m[resample]
+    v_sample = o_velocity[resample]
+
+    try:
+      params_log_sample, _ = curve_fit(Log_Model, r_sample, v_sample, p0=p0_log, bounds=(lower_bounds, upper_bounds), maxfev=100000)
+      bootstrap.append(params_log_sample)
+    except RuntimeError:
+      continue
+
+  bootstrap = np.array(bootstrap)
+  bootstrap_err = np.std(bootstrap, axis=0)
+
+  bootstrap_err_linear = params_linear * np.log(10) * bootstrap_err
+
+  print(f"The error margins are:{bootstrap_err_linear}")
+

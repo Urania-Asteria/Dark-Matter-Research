@@ -1,0 +1,196 @@
+#STEP 2 OF PROGRAM FLOW
+
+#Calculates the velocity and density values, including their error bounds, using the models with fitted parameters
+
+import math
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.utils import resample
+
+######################################################################
+#Calculates velocity values without the contribution of dm_halo
+
+def Expected_curve (radius, G, Bh_M, B_M, D_M, H_density, H_r, a, r0):
+  v_1 = []
+  v_2 = []
+  v_3 = []
+
+  #Calculates each velocity value using its radius and stores it in empty lists
+  for r in radius:
+    r = r*3.0857e19 #convert r to meters
+    value = (G*Bh_M/r) #Black Hole
+    v1 = np.sqrt(value) if value > 0 else 0
+    v2 = np.sqrt(G*B_M*r/(r+a)**2) #Bulge
+    v3 = np.sqrt(G * D_M / (2 * r0) * (r / r0)**2 * np.exp(-r / r0)) #Disk
+
+    v_1.append(v1/1000)
+    v_2.append(v2/1000)
+    v_3.append(v3/1000)
+
+  #Converts to np array for graphing
+  ey1_values=np.array(v_1)
+  ey2_values=np.array(v_2)
+  ey3_values=np.array(v_3)
+
+  #Ensures values are not negative
+  y_values = np.sqrt(ey1_values**2 + ey2_values**2 + ey3_values**2)
+  ey = np.array(y_values)
+
+  print(f"The calculated expected values are: {ey}")
+  print(f"The calculated black hole values are: {ey1_values}")
+  print(f"The calculated bulge values are: {ey2_values}")
+  print(f"The calculated disk values are: {ey3_values}")
+
+  return ey, ey1_values, ey2_values, ey3_values
+
+######################################################################
+#Specifically calculates dark matter halo velocities
+
+def dm_halo(radius, H_density, H_r, G, y1_values, y2_values, y3_values):
+
+  #Stores values in empty list
+  v_4 = []
+  for r in radius:
+    r = r*3.0857e19
+    halo_term = (G * (4 * np.pi * H_density * H_r**3 * (np.log(1 + r / H_r) - r / (r + H_r))/r))#Dark matter halo
+    v4 = np.sqrt(halo_term) if halo_term > 0 else 0
+    v_4.append(v4/1000)
+  y4_values=np.array(v_4)
+  print(f"The calculated dark matter halo values are: {y4_values}")
+  
+  #Ensures positive values
+  d_values = np.sqrt(y1_values**2 + y2_values**2 + y3_values**2 + y4_values**2)
+  print(f"The calculated total values are: {d_values}")
+
+  return y4_values, d_values
+
+######################################################################
+#Calculates density values based on velocities
+
+def Density(radius, y1_values, y2_values, y3_values, G, o_velocity):
+
+  density = []
+  ndensity = []
+  edensity = []
+
+  #Calculates true density values, dark matter halo density, and expected density
+  index = len(radius)
+  for i in range(index):
+    if i<index-1:
+      mass1 = (y1_values[i]**2 * radius[i]*3.0857e19)/G
+      mass2 = (y2_values[i]**2 * radius[i]*3.0857e19)/G
+      mass3 = (y3_values[i]**2 * radius[i]*3.0857e19)/G
+      emass = mass1 + mass2 + mass3
+      mass = (o_velocity[i]**2 * radius[i]*3.0857e19)/G
+
+      massi1 = (y1_values[i+1]**2 * radius[i+1]*3.0857e19)/G
+      massi2 = (y2_values[i+1]**2 * radius[i+1]*3.0857e19)/G
+      massi3 = (y3_values[i+1]**2 * radius[i+1]*3.0857e19)/G
+      emassi = massi1 + massi2 + massi3
+      massi = (o_velocity[i+1]**2 * radius[i+1]*3.0857e19)/G
+
+      volume = 4/3 * math.pi * (radius[i]*3.0857e19)**3
+      volumei = 4/3 * math.pi * (radius[i+1]*3.0857e19)**3
+
+      density.append(((massi - mass) - (emassi - emass))/(volumei - volume))
+      ndensity.append((massi - mass)/(volumei - volume))
+      edensity.append((emassi - emass)/(volumei - volume))
+
+    else:
+      break
+
+  print(f"The dark matter density values are: {density}")
+  print(f"The total density values are: {ndensity}")
+  print(f"The expected density values are: {edensity}")
+
+  return density, ndensity, edensity
+
+######################################################################
+#Uses the Monte Carlo error method to find the error range for graphs
+
+def monte_carlo_error(radius, G, Bh_M, Bh_M_err, B_M, B_M_err, D_M, D_M_err, H_density, H_density_err, H_r, H_r_err, a, a_err, r0, r0_err):
+
+  N=1000
+  v1_list = []
+  v2_list = []
+  v3_list = []
+  v4_list = []
+  d_list = []
+  ey_list = []
+
+  #Monte Carlo error method
+  for _ in range(N):
+    Bh_M_sample = np.clip(np.random.normal(Bh_M, Bh_M_err), Bh_M * 0.5, Bh_M * 1.5)
+    B_M_sample = np.clip(np.random.normal(B_M, B_M_err), B_M * 0.5, B_M * 1.5)
+    D_M_sample = np.clip(np.random.normal(D_M, D_M_err), D_M * 0.5, D_M * 1.5)
+    H_density_sample = np.clip(np.random.normal(H_density, H_density_err), H_density * 0.5, H_density * 1.5)
+    H_r_sample = np.clip(np.random.normal(H_r, H_r_err), H_r * 0.5, H_r * 1.5)
+    a_sample = np.clip(np.random.normal(a, a_err),  a * 0.5, a * 1.5)
+    r0_sample = np.clip(np.random.normal(r0, r0_err), r0 * 0.5, r0 * 1.5)
+
+    ey, ey1_values, ey2_values, ey3_values = Expected_curve(radius, G, Bh_M_sample, B_M_sample, D_M_sample, H_density_sample, H_r_sample, a_sample, r0_sample)
+    y4_values, d_values = dm_halo(radius, H_density_sample, H_r_sample, G, ey1_values, ey2_values, ey3_values)
+
+    v1_list.append(ey1_values)
+    v2_list.append(ey2_values)
+    v3_list.append(ey3_values)
+    v4_list.append(y4_values)
+    ey_list.append(ey)
+    d_list.append(d_values)
+
+  #Stores as arrays to use when graphing
+  v1_list = np.array(v1_list)
+  v2_list = np.array(v2_list)
+  v3_list = np.array(v3_list)
+  v4_list = np.array(v4_list)
+  ey_list = np.array(ey_list)
+  d_list = np.array(d_list)
+
+  v1_mean = np.mean(v1_list, axis=0)
+  v1_std = np.std(v1_list, axis=0)
+  v2_mean = np.mean(v2_list, axis=0)
+  v2_std = np.std(v2_list, axis=0)
+  v3_mean = np.mean(v3_list, axis=0)
+  v3_std = np.std(v3_list, axis=0)
+  v4_mean = np.mean(v4_list, axis=0)
+  v4_std = np.std(v4_list, axis=0)
+  ey_mean = np.mean(ey_list, axis=0)
+  ey_std = np.std(ey_list, axis=0)
+  d_mean = np.mean(d_list, axis=0)
+  d_std = np.std(d_list, axis=0)
+
+  return v1_mean, v1_std, v2_mean, v2_std, v3_mean, v3_std, v4_mean, v4_std, ey_mean, ey_std, d_mean, d_std
+
+######################################################################
+
+def main():
+
+  #Sample Fitted Parameters
+  NGC_Bh_M = 1.0000000000000164e+36 #kg
+  NGC_B_M = 3.1622776601683277e+40 #kg
+  NGC_D_M = 5.004516478627915e+40 #kg
+  NGC_r0 = 1.5446770226191244e+20 #m
+  NGC_H_density = 3.8325443310738057e-23 #kg/m^3
+  NGC_H_r = 1.462006114629418e+21 #m
+  NGC_a = 1.400080489198098e+20 #m
+
+  G = 6.6743e-11 #Gravitational constant in m^3 kg^-1 s^-2
+  kpc_to_m = 3.0857e19
+
+  #Sample data
+  radius_kpc = np.array([0.67, 1.32, 1.97])
+  radius_m = radius_kpc * kpc_to_m
+
+  o_velocity = np.array([43.8, 64.2, 73.3])
+  r_max = np.max(radius_kpc)    
+  v_max = np.max(o_velocity)   
+  v = np.array(Velocity_Model(radius_kpc / r_max))
+  v_values=v*v_max
+
+  #Runs functions above to find velocity, density, and error values
+  e_array, y1_array, y2_array, y3_array = Expected_curve(radius_kpc, G, NGC_Bh_M, NGC_B_M, NGC_D_M, 0, 0, NGC_a, NGC_r0)
+  y4_array, d_array = dm_halo(radius_kpc, NGC_H_density, NGC_H_r, G, y1_array, y2_array, y3_array)
+  dm_density, total_density, e_density = Density(radius_kpc, y1_array, y2_array, y3_array, G, v_values)
+  v1_mean, v1_std, v2_mean, v2_std, v3_mean, v3_std, v4_mean, v4_std, ey_mean, ey_std, d_mean, d_std = monte_carlo_error(radius_kpc, G, NGC_Bh_M, Bh_M_err, NGC_B_M, B_M_err, NGC_D_M, D_M_err, NGC_H_density, H_density_err, NGC_H_r, H_r_err, NGC_a, a_err, NGC_r0, r0_err)
+
+main()

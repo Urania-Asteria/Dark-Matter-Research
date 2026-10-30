@@ -1,0 +1,163 @@
+#STEP 3 OF PROGRAM FLOW
+
+#Uses the velocity and density values found previously to create linear and contour plots
+import math
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from sklearn.utils import resample
+import numpy as np
+
+######################################################################
+#Graphs each functions of the different equations 
+
+def Graph(x_values, y1_values, y2_values, y3_values, ey, y5_values, y4_values, d_values, radius_kpc, G, NGC_Bh_M, Bh_M_err, NGC_B_M, B_M_err, NGC_D_M, D_M_err, NGC_H_density, H_density_err, NGC_H_r, H_r_err, NGC_a, a_err, NGC_r0, r0_err):
+
+    plt.plot(x_values, y1_values, label="Black Hole", color='blue')
+    plt.plot(x_values, y2_values, label="Buldge", color='orange')
+    plt.plot(x_values, y3_values, label="Disk", color='green')
+    plt.plot(x_values, ey, label="Expected Sum", color='red')
+    plt.plot(x_values, y5_values, label="Observed Data", color='purple')
+    plt.plot(x_values, y4_values, label="Dark Matter Halo", color='brown')
+    plt.plot(x_values, d_values, label="Parameterized Model", color='pink')
+
+    v1_mean, v1_std, v2_mean, v2_std, v3_mean, v3_std, v4_mean, v4_std, ey_mean, ey_std, d_mean, d_std = monte_carlo_error(radius_kpc, G, NGC_Bh_M, Bh_M_err, NGC_B_M, B_M_err, NGC_D_M, D_M_err, NGC_H_density, H_density_err, NGC_H_r, H_r_err, NGC_a, a_err, NGC_r0, r0_err)
+
+    #Includes error bars
+    plt.errorbar(x_values, v1_mean, yerr=v1_std, fmt='o', color='blue')
+    plt.errorbar(x_values, v2_mean, yerr=v2_std, fmt='o', color='orange')
+    plt.errorbar(x_values, v3_mean, yerr=v3_std, fmt='o', color='green')
+    plt.errorbar(x_values, v4_mean, yerr=v4_std, fmt='o', color='brown')
+    plt.errorbar(x_values, ey_mean, yerr=ey_std, fmt='o', color='red')
+    plt.errorbar(x_values, d_mean, yerr=d_std, fmt='o', color='pink')
+
+    plt.title("NGC 4559 Observed vs. Expected Galaxy Rotation Curve", fontsize=14, fontweight='bold')
+    plt.xlabel("Radius (kpc)")
+    plt.ylabel("Orbital Velocity (km/s)")
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    plt.legend()
+    plt.show()
+
+######################################################################
+
+def main():
+
+    #Calls function for graphing all the functions
+    Graph(radius_kpc, y1_array, y2_array, y3_array, e_array, o_velocity, y4_array, d_array, radius_kpc, G, NGC_Bh_M, Bh_M_err, NGC_B_M, B_M_err, NGC_D_M, D_M_err, NGC_H_density, H_density_err, NGC_H_r, H_r_err, NGC_a, a_err, NGC_r0, r0_err)
+
+######################################################################
+    #Density and Dark Matter Density Plots with Error Bars
+
+    radii = radius_kpc[:-1] 
+    dm_density = np.array(dm_density)
+    dm_density = np.nan_to_num(dm_density, nan=0.0, posinf=0.0, neginf=0.0)
+    total_density = np.array(total_density)
+    e_density = np.array(e_density)
+    e_density = np.nan_to_num(e_density, nan=0.0, posinf=0.0, neginf=0.0)
+    e_density = np.where(e_density < 0, 0, e_density)
+
+    v1_mean = np.array(v1_mean)
+    v1_std = np.array(v1_std)
+    v2_mean = np.array(v2_mean)
+    v2_std = np.array(v2_std)
+    v3_mean = np.array(v3_mean)
+    v3_std = np.array(v3_std)
+    ey_mean = np.array(ey_mean)
+    ey_std = np.array(ey_std)
+    d_mean = np.array(d_mean)
+    d_std = np.array(d_std)
+
+    v1_nonzero = np.where(v1_mean == 0, 1e-10, v1_mean)
+    v2_nonzero = np.where(v2_mean == 0, 1e-10, v2_mean)
+    v3_nonzero = np.where(v3_mean == 0, 1e-10, v3_mean)
+    ey_nonzero = np.where(ey_mean == 0, 1e-10, ey_mean)
+    v4_nonzero = np.where(v4_mean == 0, 1e-10, v4_mean)
+    d_nonzero = np.where(d_mean == 0, 1e-10, d_mean)
+
+    err_v1 = 2 * (v1_std / v1_nonzero)
+    err_v2 = 2 * (v2_std / v2_nonzero)
+    err_v3 = 2 * (v3_std / v3_nonzero)
+    err_v4 = 2 * (v4_std / v4_nonzero)
+    err_ey = 2 * (ey_std / ey_nonzero)
+    err_d = 2 * (d_std / d_nonzero)
+
+    err_emass = np.sqrt(err_v1**2 + err_v2**2 + err_v3**2)
+    err_dmass = np.sqrt(err_d**2)
+    err_halo = np.sqrt(err_v4**2)
+
+    edensity_err = err_emass[:-1] * e_density
+    tdensity_err = err_dmass[:-1] * total_density
+    halo_err = err_halo[:-1] * dm_density
+    edensity_err = np.clip(err_emass[:-1] * e_density, 0, None)
+    tdensity_err = np.clip(err_dmass[:-1] * total_density, 0, None)
+    halo_err = np.clip(err_halo[:-1] * dm_density, 0, None)
+
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot with thicker lines and color choices
+    plt.plot(radii, dm_density, label="Dark Matter Density", color='navy', linewidth=2)
+    plt.plot(radii, total_density, label="Total Mass Density", color='black', linewidth=2)
+    plt.plot(radii, e_density, label="Visible Matter Density", color='orange', linewidth=2)
+    plt.errorbar(radii, e_density, yerr=edensity_err, fmt='o', color='orange')
+    plt.errorbar(radii, total_density, yerr=tdensity_err, fmt='o', color='black')
+    plt.errorbar(radii, dm_density, yerr=halo_err, fmt='o', color='navy')
+
+    # Axis labels and title
+    plt.xlabel("Radius (kpc)", fontsize=12)
+    plt.ylabel("Density (kg/m³)", fontsize=12)
+    plt.title("NGC 4559 Density Profile", fontsize=14, fontweight='bold')
+
+    # Grid for readability
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    # Legend styling
+    plt.legend(loc='upper right', fontsize=10, frameon=True)
+
+    plt.show()
+
+######################################################################
+    # Density Contour Plot with color coding
+
+    radius = np.array(G_radius[:-1])
+    dm_density = np.array(dm_density)
+    total_density = np.array(density)
+
+    diff = np.abs(total_density - dm_density)
+    diff = diff / np.max(diff)
+
+    index = np.argmin(diff)
+    print(f"The radius at which the dark matter density is closest to the total density is: {radius[index]} kpc")
+    transition = radius[index]
+
+    theta = np.linspace(0, 2 * np.pi, 300)
+    r_grid, theta_grid = np.meshgrid(radius, theta)
+    diff_grid = np.tile(diff, (len(theta), 1))
+
+    X = r_grid * np.cos(theta_grid)
+    Y = r_grid * np.sin(theta_grid)
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    contour = plt.contourf(X, Y, diff_grid, levels=100, cmap='coolwarm')
+
+    circle = [10, 25, 50, 75, 100, 150, 200]
+    for r in circle:
+        circle = plt.Circle((0,0), r, color='black', linestyle='--', linewidth=0.7, fill=False)
+        ax.add_artist(circle)
+        ax.text(r * np.cos(np.pi/4), r * np.sin(np.pi/4), f'{r}', fontsize=8, color='black', ha='left', va='bottom', rotation = 45)
+
+    transition_circle = plt.Circle((0,0), transition, color='navy', linestyle='--', linewidth=2, fill=False)
+    ax.add_artist(transition_circle)
+    ax.text(transition * np.cos(np.pi/6), transition * np.sin(np.pi/6), f'Fully Dark Matter \n at {transition:.1f} kpc', fontsize=9, color='black', ha='center', va='bottom', fontweight='bold')
+
+    ax.set_title("Dark Matter Map")
+    ax.axis('off')
+    ax.set_aspect('equal')
+    fig.colorbar(contour, ax=ax, label="Density Difference")
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+main()
